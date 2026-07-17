@@ -97,7 +97,7 @@ class MAnkiClient(ctk.CTk):
             "You are a flashcard assistant. For the word provided, return STRICTLY a JSON object with these exact keys:\n"
             '"word": the word itself\n"sentence": a descriptive example sentence\n'
             '"definition": LANG definition\n"translation": YOUR_NATIVE_LANG translation\n'
-            '"image_query": a visual description to find an image for this word\n'
+            '"image_query": a visual description to find an image for this word (short and easy for stock photo providers)\n'
             "Return ONLY valid JSON without markdown blocks."
         )
         self.prepared_prompt = self.default_prompt
@@ -585,10 +585,12 @@ class MAnkiClient(ctk.CTk):
         self.tts_list_frame = ctk.CTkFrame(self.settings_scroll_frame, fg_color=("#f1f1f1", "#333333"), corner_radius=10)
         self.tts_list_frame.pack(fill="x", padx=10, pady=(15, 20), ipadx=5, ipady=5)
 
-        ctk.CTkLabel(self.settings_scroll_frame, text="Images").pack(anchor="w", padx=10, pady=(10, 5))
+        self.lbl_images = ctk.CTkLabel(self.settings_scroll_frame, text="Images")
+        self.lbl_images.pack(anchor="w", padx=10, pady=(10, 5))
         _, self.lbl_image_provider, self.image_provider_menu = self._create_dropdown(self.settings_scroll_frame, "Image Provider", self.available_image_providers, "image_provider")
 
-        ctk.CTkLabel(self.settings_scroll_frame, text="AnkiConnect").pack(anchor="w", padx=10, pady=(10, 5))
+        self.lbl_ankiconnect = ctk.CTkLabel(self.settings_scroll_frame, text="AnkiConnect")
+        self.lbl_ankiconnect.pack(anchor="w", padx=10, pady=(10, 5))
         anki_top_frame = ctk.CTkFrame(self.settings_scroll_frame, fg_color="transparent")
         anki_top_frame.pack(fill="x", padx=10, pady=(5, 10))
         
@@ -718,7 +720,7 @@ class MAnkiClient(ctk.CTk):
         w_14 = [self.api_entry, self.lbl_gemini_model, self.auto_switch_switch, self.resizable_switch, self.auto_tags_switch, self.tts_search_entry, self.lbl_image_provider, self.lbl_status_prefix, self.lbl_status_value, self.test_anki_btn, self.lbl_deck, self.deck_menu, self.lbl_model, self.model_menu, self.lbl_audio_field, self.audio_field_menu, self.lbl_image_field, self.image_field_menu, self.lbl_theme, self.theme_menu, self.lbl_accent_color, self.color_menu, self.lbl_font_family, self.font_menu, self.log_box]
         for w in filter(None, w_14): w.configure(font=(font_name, 14))
 
-        w_14_bold = [self.lbl_gemini_title, self.lbl_tts_priority, self.lbl_appearance, self.lbl_prompt, self.back_btn, self.done_btn, self.apply_btn, self.close_btn]
+        w_14_bold = [self.lbl_gemini_title, self.lbl_tts_priority, self.lbl_images, self.lbl_ankiconnect, self.lbl_appearance, self.lbl_prompt, self.back_btn, self.done_btn, self.apply_btn, self.close_btn]
         for w in filter(None, w_14_bold): w.configure(font=(font_name, 14, "bold"))
 
         self.lbl_api_keys.configure(font=(font_name, 14, "bold", "underline"))
