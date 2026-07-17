@@ -5,6 +5,7 @@ An ai-powered tool for creating easy anki flashcards. Supports only Gemini API (
 ### How to use
 <img width="1734" height="1122" alt="manki" src="https://github.com/user-attachments/assets/edfe3b94-b3be-49e3-92dc-bc244d45e666" />
 You write (or paste) a new word into the program and the LLM generates json with the word itself, a sentence using it, a definition, a translation, and a search query for an image suitable for the mined word (its all by default, you can remove or add any new fields). Then AnkiConnect receives this json and creates a new card in anki. You can also select TTS service and image provider for words. Images are added to the card by copying any pictures to the clipboard
+
 ### Features
 - Gemini Multiple API keys - (keys will automatically rotate upon encountering an error. if your free api key exceeds its limits)
 
