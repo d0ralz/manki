@@ -47,7 +47,7 @@ class MAnkiClient(ctk.CTk):
     # ==========================================
     def __init__(self):
         super().__init__()
-        self.title("MAnki v1.0")
+        self.title("MAnki v1.0.0")
         self.geometry("550x450") 
         self.minsize(550, 450)
         self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
@@ -642,7 +642,7 @@ class MAnkiClient(ctk.CTk):
         self.resizable_switch = ctk.CTkSwitch(resizable_container, text="Allow window resizing (laggy asf)", command=lambda: self._on_temp_change("resizable", self.resizable_switch.get() == 1))
         self.resizable_switch.pack(side="left")
 
-        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.0 / silly cat doralz", text_color="gray")
+        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.0.0 © 2026 doralz | MIT License", text_color="gray")
         self.credits_lbl.pack(pady=(20, 0), anchor="center")
 
         self.settings_bottom_frame = ctk.CTkFrame(self.settings_card, fg_color="transparent")
