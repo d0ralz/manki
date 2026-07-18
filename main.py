@@ -9,7 +9,8 @@ import re
 import webbrowser
 import base64
 import time
-from io import BytesIO
+import ctypes
+from pathlib import Path
 from PIL import ImageGrab, Image
 from anki import AnkiClient
 from services import GeminiClient, TTSProvider, ImageProvider
@@ -17,7 +18,19 @@ from services import GeminiClient, TTSProvider, ImageProvider
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-SETTINGS_FILE = "settings.json"
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+ctk.set_appearance_mode("System")
+ctk.set_default_color_theme("blue")
+
+config_dir = os.path.join(Path.home(), ".config", "manki")
+os.makedirs(config_dir, exist_ok=True)
+SETTINGS_FILE = os.path.join(config_dir, "settings.json")
 
 class MAnkiClient(ctk.CTk):
     # ==========================================
@@ -46,11 +59,29 @@ class MAnkiClient(ctk.CTk):
     # INITIALIZATION
     # ==========================================
     def __init__(self):
+        super().__init__(className="MAnki v1.0.0")
+        self.wm_class("MAnki v1.0.0", "MAnki v1.0.0")
+        self.title("MAnki v1.0.0")
+        self.geometry("550x450") 
+        self.minsize(550, 450)
+        self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
+
+    def __init__(self):
         super().__init__()
         self.title("MAnki v1.0.0")
         self.geometry("550x450") 
         self.minsize(550, 450)
         self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
+
+        if os.name == 'nt':
+            myappid = 'manki.doralz.app.1.0.0'
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+            icon_path = resource_path('manki.ico')
+            self.iconbitmap(icon_path)
+        elif os.name == 'posix':
+            icon_path = resource_path('manki.png')
+            img = tk.PhotoImage(file=icon_path)
+            self.iconphoto(True, img)
 
         self.anki = AnkiClient()
         self._init_state_variables()
