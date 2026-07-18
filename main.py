@@ -66,13 +66,6 @@ class MAnkiClient(ctk.CTk):
         self.minsize(550, 450)
         self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
 
-    def __init__(self):
-        super().__init__()
-        self.title("MAnki v1.0.0")
-        self.geometry("550x450") 
-        self.minsize(550, 450)
-        self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
-
         if os.name == 'nt':
             myappid = 'manki.doralz.app.1.0.0'
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
