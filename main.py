@@ -85,11 +85,7 @@ class MAnkiClient(ctk.CTk):
         self.current_gemini_model, self.current_theme, self.current_accent, self.current_font = "Gemini 3.1 Flash Lite", "System", "Blue", "Arial"
         self.resizable_window, self.auto_tags = ctk.BooleanVar(value=False), ctk.BooleanVar(value=True)
         
-        self.default_prompt = (
-            "You are a flashcard assistant. For the word provided, return STRICTLY a JSON object with these exact keys:\n"
-            '"word": the word itself\n"sentence": a descriptive example sentence\n"definition": LANG definition\n"translation": YOUR_NATIVE_LANG translation\n'
-            '"image_query": a visual description to find an image for this word (short and easy for stock photo providers)\nReturn ONLY valid JSON without markdown blocks.'
-        )
+        self.default_prompt = ("⬇  ⬇  ⬇  ENSURE TO DELETE THIS AFTER READING   ⬇  ⬇  ⬇\n\nhi! here you can configure which lines the LLM will generate and\ntheir content. it works quite easily. you need to enter the exact\nname of the field from your anki card model in quotation marks,\nand then, after a colon, write the desired content for that field\nlike this:\n\"FIELD_NAME\": CONTENT\n\"FIELD_NAME2\": CONTENT2\n...\nif you're using image provider feature, use the field name\n\"image_query\". otherwise, it won't work. remember that you can\ngive your own instructions to the llm (for example, to bold a\nword in a sentence)\nthere's example of prepared prompt below:\n\n⬆  ⬆  ⬆   ENSURE TO DELETE THIS AFTER READING   ⬆  ⬆  ⬆\n\nYou are a flashcard assistant. For the word provided, return STRICTLY a JSON object with these exact keys:\n\"word\": the word itself\n\"sentence\": a descriptive example sentence\n\"definition\": LANG definition\n\"translation\": LANG translation\n\"image_query\": a visual description to find an image for this word (short and easy for stock photo providers)\nReturn ONLY valid JSON without markdown blocks.")
         self.prepared_prompt = self.default_prompt
         self.anki_deck = self.anki_model = self.anki_tts_field = self.anki_audio_field = self.anki_image_field = ""
 
