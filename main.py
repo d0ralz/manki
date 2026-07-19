@@ -754,7 +754,7 @@ class MAnkiClient(ctk.CTk):
         fields = self.anki.invoke('modelFieldNames', modelName=model_name)
         if fields:
             values = ["None"] + fields
-            for menu, tv in [(self.word_field_menu, self.temp_anki_tts_field), (self.audio_field_menu, self.temp_anki_image_field), (self.image_field_menu, self.temp_anki_image_field)]:
+            for menu, tv in [(self.word_field_menu, self.temp_anki_tts_field), (self.audio_field_menu, self.temp_anki_audio_field), (self.image_field_menu, self.temp_anki_image_field)]:
                 menu.configure(values=values); menu.set(tv.get() if tv.get() in values else "None")
         else:
             for menu in [self.word_field_menu, self.audio_field_menu, self.image_field_menu]: menu.configure(values=["—"]); menu.set("—")
