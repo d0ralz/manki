@@ -11,11 +11,11 @@ class GeminiClient:
         client = genai.Client(api_key=api_key)
         full_prompt = f"{prompt}\n\nWord to define: {word}"
         
-        response = client.models.generate_content(
+        chat = client.chats.create(
             model=model_name,
-            contents=full_prompt,
             config={"response_mime_type": "application/json"}
         )
+        response = chat.send_message(full_prompt)
         return json.loads(response.text)
 
 class TTSProvider:
