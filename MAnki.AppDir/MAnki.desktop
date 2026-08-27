@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.1
+Name=MAnki
+GenericName=Anki Flashcard Generator
+Comment=An AI-powered tool for creating Anki flashcards
+Exec=MAnki
+Icon=MAnki
+Terminal=false
+Categories=Education;Utility;
+StartupWMClass=MAnki
+X-AppImage-Version=1.1.0
+X-Developer=doralz
