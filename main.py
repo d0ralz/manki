@@ -1,4 +1,4 @@
-import customtkinter as ctk, tkinter as tk, tkinter.messagebox as messagebox
+import customtkinter as ctk, tkinter as tk, tkinter.messagebox as messagebox, tkinter.font as tkfont
 import threading, json, os, sys, urllib.parse, re, webbrowser, base64, time, ctypes, subprocess, html
 from io import BytesIO
 from pathlib import Path
@@ -20,7 +20,7 @@ SETTINGS_FILE, API_FILE = os.path.join(config_dir, "settings.json"), os.path.joi
 
 class MAnkiClient(ctk.CTk):
     GOOGLE_LANGS = "en-US,en-GB,en-AU,en-IN,ru-RU,es-ES,es-MX,fr-FR,fr-CA,de-DE,it-IT,pt-PT,pt-BR,ja-JP,ko-KR,zh-CN,zh-TW,ar-SA,hi-IN,nl-NL,pl-PL,tr-TR,uk-UA,vi-VN,th-TH,id-ID,sv-SE,da-DK,fi-FI,no-NO,cs-CZ,el-GR,hu-HU,ro-RO,sk-SK,af,sq,am,hy,az,eu,be,bn,bs,bg,ca,ceb,ny,co,hr,eo,et,tl,fy,gl,ka,gu,ht,ha,haw,iw,hmn,is,ig,ga,jw,kn,kk,km,rw,ku,ky,lo,la,lv,lt,lb,mk,mg,ms,ml,mt,mi,mr,mn,my,ne,or,ps,fa,pa,sm,gd,sr,st,sn,sd,si,sl,so,su,sw,tg,ta,tt,te,tk,ur,ug,uz,cy,xh,yi,yo,zu".split(",")
-    
+
     GEMINI_MODELS = {
         "Gemini 2.5 Flash": "gemini-2.5-flash", "Gemini 2.5 Flash Lite": "gemini-2.5-flash-lite", "Gemini 2.5 Pro": "gemini-2.5-pro",
         "Gemini 3 Flash": "gemini-3-flash-preview", "Gemini 3.1 Pro": "gemini-3.1-pro-preview", "Gemini 3.1 Flash Lite": "gemini-3.1-flash-lite", "Gemini 3.5 Flash": "gemini-3.5-flash"
@@ -32,11 +32,13 @@ class MAnkiClient(ctk.CTk):
     }
 
     def __init__(self):
-        super().__init__(className="MAnki v1.0.0")
-        self.title("MAnki v1.0.0")
-        self.geometry("550x450") 
+        super().__init__(className="MAnki v1.1.0")
+        self.title("MAnki v1.1.0")
+        self.geometry("550x450")
         self.minsize(550, 450)
         self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
+
+        self._setup_cross_layout_bindings()
 
         if os.name == 'nt':
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('manki.doralz.app.1.0.0')
@@ -49,7 +51,7 @@ class MAnkiClient(ctk.CTk):
         self.load_settings()
 
         if os.name != 'nt': self.bind("<FocusIn>", self._handle_focus_in, add="+")
-        
+
         ctk.set_appearance_mode(self.current_theme)
         self.toggle_resizable_visual()
         self.setup_animator()
@@ -60,14 +62,73 @@ class MAnkiClient(ctk.CTk):
         self.main_container = ctk.CTkFrame(self, fg_color=("#f5f5f5", "#2c2c2c"))
         self.main_container.grid(row=0, column=0, sticky="nsew")
         self.main_container.grid_columnconfigure(0, weight=1)
-        self.overlay_frame = ctk.CTkFrame(self, fg_color=("#cfcfcf", "#202020"), corner_radius=0)
 
         self.setup_main_ui()
         self.setup_settings_card()
         self.setup_log_card()
-        
+
         self.apply_accent_color_visually(self.current_accent)
         self.apply_font_visually(self.current_font)
+        self.main_container.tkraise()
+
+    def _setup_cross_layout_bindings(self):
+        bindings = {
+            "<<Copy>>": ["<Control-cyrillic_es>", "<Control-Cyrillic_es>", "<Command-cyrillic_es>", "<Command-Cyrillic_es>"],
+            "<<Paste>>": ["<Control-cyrillic_em>", "<Control-Cyrillic_em>", "<Command-cyrillic_em>", "<Command-Cyrillic_em>"],
+            "<<Cut>>": ["<Control-cyrillic_che>", "<Control-Cyrillic_che>", "<Command-cyrillic_che>", "<Command-Cyrillic_che>"],
+            "<<SelectAll>>": ["<Control-a>", "<Control-A>", "<Control-cyrillic_ef>", "<Control-Cyrillic_ef>", "<Command-a>", "<Command-A>", "<Command-cyrillic_ef>", "<Command-Cyrillic_ef>"],
+            "<<Undo>>": ["<Control-cyrillic_ya>", "<Control-Cyrillic_ya>", "<Command-cyrillic_ya>", "<Command-Cyrillic_ya>"],
+            "<<Redo>>": ["<Control-cyrillic_en>", "<Control-Cyrillic_en>", "<Command-cyrillic_en>", "<Command-Cyrillic_en>"]
+        }
+        for event_name, patterns in bindings.items():
+            for pattern in patterns:
+                try: self.event_add(event_name, pattern)
+                except Exception: pass
+
+        def _handle_ctrl_cmd(e):
+            char = e.char
+            keysym = e.keysym.lower()
+            keycode = e.keycode
+            w = e.widget
+            is_text = isinstance(w, tk.Text) or getattr(w, "winfo_class", lambda: "")() == "Text"
+            is_entry = isinstance(w, tk.Entry) or getattr(w, "winfo_class", lambda: "")() == "Entry"
+            if not (is_text or is_entry):
+                return
+
+            if char == '\x03' or keysym in ('c', 'cyrillic_es', 'es', 'с') or keycode in (67, 54):
+                w.event_generate("<<Copy>>")
+                return "break"
+            elif char == '\x16' or keysym in ('v', 'cyrillic_em', 'em', 'м') or keycode in (86, 55):
+                w.event_generate("<<Paste>>")
+                return "break"
+            elif char == '\x18' or keysym in ('x', 'cyrillic_che', 'che', 'ч') or keycode in (88, 53):
+                w.event_generate("<<Cut>>")
+                return "break"
+            elif char == '\x01' or keysym in ('a', 'cyrillic_ef', 'ef', 'ф') or keycode in (65, 38):
+                if is_entry:
+                    w.select_range(0, tk.END)
+                    w.icursor(tk.END)
+                else:
+                    w.tag_add("sel", "1.0", "end")
+                return "break"
+            elif char == '\x1a' or keysym in ('z', 'cyrillic_ya', 'ya', 'я') or keycode in (90, 52):
+                if is_text:
+                    try: w.edit_undo()
+                    except Exception: pass
+                else:
+                    w.event_generate("<<Undo>>")
+                return "break"
+            elif char == '\x19' or keysym in ('y', 'cyrillic_en', 'en', 'н') or keycode in (89, 29):
+                if is_text:
+                    try: w.edit_redo()
+                    except Exception: pass
+                else:
+                    w.event_generate("<<Redo>>")
+                return "break"
+
+        for pattern in ["<Control-Key>", "<Command-Key>"]:
+            self.bind_class("Entry", pattern, _handle_ctrl_cmd)
+            self.bind_class("Text", pattern, _handle_ctrl_cmd)
 
     def _handle_focus_in(self, event):
         if getattr(self, "waiting_for_image", False):
@@ -80,11 +141,11 @@ class MAnkiClient(ctk.CTk):
         self.mining_state, self.mining_cancelled = "idle", False
         self.error_state_active = self.warning_state_active = False
         self.api_keys, self.mined_history = [], []
-        
+
         self.active_key, self.auto_switch_key = ctk.StringVar(value="No keys selected"), ctk.BooleanVar(value=False)
         self.current_gemini_model, self.current_theme, self.current_accent, self.current_font = "Gemini 3.1 Flash Lite", "System", "Blue", "Arial"
-        self.resizable_window, self.auto_tags = ctk.BooleanVar(value=False), ctk.BooleanVar(value=True)
-        
+        self.resizable_window, self.auto_tags, self.allow_duplicates = ctk.BooleanVar(value=False), ctk.BooleanVar(value=True), ctk.BooleanVar(value=False)
+
         self.default_prompt = ("⬇  ⬇  ⬇  ENSURE TO DELETE THIS AFTER READING   ⬇  ⬇  ⬇\n\nhi! here you can configure which lines the LLM will generate and\ntheir content. it works quite easily. you need to enter the exact\nname of the field from your anki card model in quotation marks,\nand then, after a colon, write the desired content for that field\nlike this:\n\"FIELD_NAME\": CONTENT\n\"FIELD_NAME2\": CONTENT2\n...\nif you're using image provider feature, use the field name\n\"image_query\". otherwise, it won't work. remember that you can\ngive your own instructions to the llm (for example, to bold a\nword in a sentence)\nthere's example of prepared prompt below:\n\n⬆  ⬆  ⬆   ENSURE TO DELETE THIS AFTER READING   ⬆  ⬆  ⬆\n\nYou are a flashcard assistant. For the word provided, return STRICTLY a JSON object with these exact keys:\n\"word\": the word itself\n\"sentence\": a descriptive example sentence\n\"definition\": LANG definition\n\"translation\": LANG translation\n\"image_query\": a visual description to find an image for this word (short and easy for stock photo providers)\nReturn ONLY valid JSON without markdown blocks.")
         self.prepared_prompt = self.default_prompt
         self.anki_deck = self.anki_model = self.anki_tts_field = self.anki_audio_field = self.anki_image_field = ""
@@ -92,9 +153,9 @@ class MAnkiClient(ctk.CTk):
         self.available_image_providers = ["None", "Google Images", "IStock", "Unsplash", "Shutterstock", "Pexels", "GettyImages", "Adobe Stock", "Adobe Stock (No AI)", "Alamy"]
         self.current_image_provider = "None"
         self.waiting_for_image = False
-        
+
         self.current_mining_note_id = self.pending_note_dict = self.duplicate_check_after_id = self.initial_clipboard_image = None
-        self.current_mining_word = self.current_image_query = self.current_image_query_actual = self.current_duplicate_query = self.previous_input_text = ""
+        self.current_mining_word = self.current_image_query = self.current_image_query_actual = self.current_duplicate_query = self.previous_input_text = self.full_image_query = ""
         self.current_fade_id, self._last_clipboard_check = 0, 0.0
 
         self.available_tts_services = ["Cambridge (UK)", "Cambridge (US)", "Oxford (UK)", "Oxford (US)"] + [f"Google ({lang})" for lang in self.GOOGLE_LANGS]
@@ -103,7 +164,7 @@ class MAnkiClient(ctk.CTk):
         self.temp_api_keys, self.temp_tts_chain = [], []
         self.temp_active_key, self.temp_gemini_model, self.temp_theme, self.temp_accent, self.temp_font = (ctk.StringVar() for _ in range(5))
         self.temp_anki_deck, self.temp_anki_model, self.temp_anki_tts_field, self.temp_anki_audio_field, self.temp_anki_image_field, self.temp_image_provider = (ctk.StringVar() for _ in range(6))
-        self.temp_auto_switch, self.temp_resizable, self.temp_auto_tags = (ctk.BooleanVar() for _ in range(3))
+        self.temp_auto_switch, self.temp_resizable, self.temp_auto_tags, self.temp_allow_duplicates = (ctk.BooleanVar() for _ in range(4))
 
     def setup_animator(self):
         self.animated_buttons, self.animated_inputs = [], []
@@ -125,26 +186,26 @@ class MAnkiClient(ctk.CTk):
     def register_button(self, btn):
         if hasattr(btn, "_smooth_hover_initialized"): return
         btn._smooth_hover_initialized = True
-        
+
         orig_fg = btn.cget("fg_color")
         is_opt = isinstance(btn, ctk.CTkOptionMenu)
         orig_hov = btn.cget("button_hover_color" if is_opt else "hover_color") if hasattr(btn, "cget") else orig_fg
-        
+
         btn.original_fg_color_tup = orig_fg if isinstance(orig_fg, (tuple, list)) else (orig_fg, orig_fg)
         btn.hover_color_tup = orig_hov if isinstance(orig_hov, (tuple, list)) else (orig_hov, orig_hov)
         btn._current_color_l, btn._current_color_d = self.hex_to_rgb(btn.original_fg_color_tup[0]), self.hex_to_rgb(btn.original_fg_color_tup[1])
-        
+
         btn.target_color_tup = btn.hover_color_tup if btn.cget("state") == "disabled" else btn.original_fg_color_tup
         if btn.cget("state") == "disabled":
             btn._current_color_l, btn._current_color_d = self.hex_to_rgb(btn.hover_color_tup[0]), self.hex_to_rgb(btn.hover_color_tup[1])
-            
+
         if not is_opt:
             try: btn.configure(hover=False)
             except Exception: pass
-        
+
         def set_tgt(color):
             if btn.cget("state") != "disabled": btn.target_color_tup = color
-            
+
         for b in [btn, getattr(btn, "_canvas", None), getattr(btn, "_text_label", None)]:
             if b: b.bind("<Enter>", lambda e: set_tgt(btn.hover_color_tup), add="+"); b.bind("<Leave>", lambda e: set_tgt(btn.original_fg_color_tup), add="+")
         self.animated_buttons.append(btn)
@@ -152,26 +213,23 @@ class MAnkiClient(ctk.CTk):
     def register_input(self, widget):
         if hasattr(widget, "_smooth_input_initialized"): return
         widget._smooth_input_initialized = True
-        
+
         inner = widget._entry if isinstance(widget, ctk.CTkEntry) else (widget._textbox if isinstance(widget, ctk.CTkTextbox) else None)
         orig_fg = widget.cget("fg_color")
         orig_fg = ("#f9f9fa", "#1d1e1e") if orig_fg in ("transparent", None) else orig_fg
         orig_fg_tup = orig_fg if isinstance(orig_fg, (tuple, list)) else (orig_fg, orig_fg)
-        
+
         l_rgb, d_rgb = self.hex_to_rgb(orig_fg_tup[0]), self.hex_to_rgb(orig_fg_tup[1])
         widget.original_fg_color_tup = orig_fg_tup
         widget.focus_color_tup = (self.rgb_to_hex(tuple(max(0, c - 15) for c in l_rgb)), self.rgb_to_hex(tuple(min(255, c + 15) for c in d_rgb)))
         widget.target_color_tup = widget.original_fg_color_tup
         widget._current_color_l, widget._current_color_d = l_rgb, d_rgb
-        
+
         widget.original_border_width = widget.cget("border_width") or 2
         widget.hover_border_width = widget.original_border_width + 2
         widget.target_border_width, widget._current_border_width, widget._is_focused = widget.original_border_width, float(widget.original_border_width), False
         self.animated_inputs.append(widget)
-        
-        def on_hover(is_ent):
-            if not getattr(widget, "_is_focused", False): widget.target_border_width = widget.hover_border_width if is_ent else widget.original_border_width
-                
+
         def on_focus(is_foc):
             widget._is_focused = is_foc
             widget.target_border_width = widget.hover_border_width if is_foc else widget.original_border_width
@@ -179,11 +237,9 @@ class MAnkiClient(ctk.CTk):
             if inner and inner.winfo_exists():
                 inner.configure(insertofftime=0 if is_foc else 300)
                 if is_foc: widget.after(400, lambda: inner.configure(insertofftime=300) if getattr(widget, "_is_focused", False) and inner.winfo_exists() else None)
-            
-        widget.bind("<Enter>", lambda e: on_hover(True), add="+"); widget.bind("<Leave>", lambda e: on_hover(False), add="+")
+
         bind_tgt = inner if inner else widget
         bind_tgt.bind("<FocusIn>", lambda e: on_focus(True), add="+"); bind_tgt.bind("<FocusOut>", lambda e: on_focus(False), add="+")
-        if inner: bind_tgt.bind("<Enter>", lambda e: on_hover(True), add="+"); bind_tgt.bind("<Leave>", lambda e: on_hover(False), add="+")
 
     def animate_loop(self):
         now = time.time()
@@ -191,7 +247,7 @@ class MAnkiClient(ctk.CTk):
         lerp_speed = min(16.0 * dt, 1.0)
         self.animated_buttons = self._update_animated_widgets(self.animated_buttons, lerp_speed, is_input=False)
         self.animated_inputs = self._update_animated_widgets(getattr(self, "animated_inputs", []), lerp_speed, is_input=True)
-        self.after(7, self.animate_loop) 
+        self.after(7, self.animate_loop)
 
     def _lerp_color(self, c, t, s): return tuple(curr + (tgt - curr) * s for curr, tgt in zip(c, t))
 
@@ -206,10 +262,10 @@ class MAnkiClient(ctk.CTk):
                     if abs(cbw - tbw) > 0.1: w._current_border_width += (tbw - cbw) * speed
                     else: w._current_border_width = float(tbw)
                     if w.cget("border_width") != int(round(w._current_border_width)): w.configure(border_width=int(round(w._current_border_width)))
-                        
+
                 t_l, t_d = self.hex_to_rgb(w.target_color_tup[0]), self.hex_to_rgb(w.target_color_tup[1])
                 c_l, c_d = w._current_color_l, w._current_color_d
-                
+
                 if sum(abs(c_l[i] - t_l[i]) + abs(c_d[i] - t_d[i]) for i in range(3)) > 1.0:
                     w._current_color_l, w._current_color_d = self._lerp_color(c_l, t_l, speed), self._lerp_color(c_d, t_d, speed)
                     nh = (self.rgb_to_hex(w._current_color_l), self.rgb_to_hex(w._current_color_d))
@@ -268,6 +324,7 @@ class MAnkiClient(ctk.CTk):
                 if self.current_image_provider not in self.available_image_providers: self.current_image_provider = "None"
                 self.resizable_window.set(d.get("resizable_window", False))
                 self.auto_tags.set(d.get("auto_tags", True))
+                self.allow_duplicates.set(d.get("allow_duplicates", False))
                 self.tts_chain = [s for s in d.get("tts_chain", self.tts_chain) if s in self.available_tts_services] or [""]
         except Exception as e: print(f"Settings load err: {e}")
 
@@ -284,21 +341,21 @@ class MAnkiClient(ctk.CTk):
                     "accent_color": self.current_accent, "font_family": self.current_font, "prepared_prompt": self.prepared_prompt,
                     "anki_deck": self.anki_deck, "anki_model": self.anki_model, "anki_tts_field": self.anki_tts_field, "anki_audio_field": self.anki_audio_field,
                     "anki_image_field": self.anki_image_field, "image_provider": self.current_image_provider, "tts_chain": self.tts_chain,
-                    "resizable_window": self.resizable_window.get(), "auto_tags": self.auto_tags.get()
+                    "resizable_window": self.resizable_window.get(), "auto_tags": self.auto_tags.get(), "allow_duplicates": self.allow_duplicates.get()
                 }, f, indent=4, ensure_ascii=False)
         except Exception as e: print(f"Settings save err: {e}")
 
     def apply_settings(self):
         res_chg = self.resizable_window.get() != self.temp_resizable.get()
         self.api_keys, self.tts_chain = self.temp_api_keys.copy(), self.temp_tts_chain.copy()
-        
+
         self.active_key.set(self.temp_active_key.get()); self.auto_switch_key.set(self.temp_auto_switch.get())
         self.current_gemini_model = self.temp_gemini_model.get(); self.current_theme = self.temp_theme.get()
         self.current_accent = self.temp_accent.get(); self.current_font = self.temp_font.get()
         self.prepared_prompt = self.prompt_textbox.get("1.0", "end-1c"); self.anki_deck = self.temp_anki_deck.get()
         self.anki_model = self.temp_anki_model.get(); self.anki_tts_field = self.temp_anki_tts_field.get(); self.anki_audio_field = self.temp_anki_audio_field.get()
         self.anki_image_field = self.temp_anki_image_field.get(); self.current_image_provider = self.temp_image_provider.get()
-        self.resizable_window.set(self.temp_resizable.get()); self.auto_tags.set(self.auto_tags.get())
+        self.resizable_window.set(self.temp_resizable.get()); self.auto_tags.set(self.temp_auto_tags.get()); self.allow_duplicates.set(self.temp_allow_duplicates.get())
 
         ctk.set_appearance_mode(self.current_theme)
         if res_chg: self.toggle_resizable_visual()
@@ -309,7 +366,7 @@ class MAnkiClient(ctk.CTk):
     def done_settings(self):
         if self.apply_btn.cget("state") == "normal": self.apply_settings()
         self.hide_settings()
-        
+
     def _on_temp_change(self, attr_name, value=None):
         if value is not None:
             attr = getattr(self, f"temp_{attr_name}")
@@ -328,7 +385,7 @@ class MAnkiClient(ctk.CTk):
             self.temp_anki_audio_field.get() != self.anki_audio_field,
             self.temp_anki_image_field.get() != self.anki_image_field, self.temp_image_provider.get() != self.current_image_provider,
             self.temp_tts_chain != self.tts_chain, self.temp_resizable.get() != self.resizable_window.get(),
-            self.temp_auto_tags.get() != self.auto_tags.get(), self.prompt_textbox.get("1.0", "end-1c") != self.prepared_prompt
+            self.temp_auto_tags.get() != self.auto_tags.get(), self.temp_allow_duplicates.get() != self.allow_duplicates.get(), self.prompt_textbox.get("1.0", "end-1c") != self.prepared_prompt
         ])
         self.set_widget_state(self.apply_btn, "normal" if changed else "disabled")
 
@@ -375,6 +432,7 @@ class MAnkiClient(ctk.CTk):
         self.image_query_link = ctk.CTkLabel(self.image_query_frame, text="", text_color=("#1a73e8", "#4da3ff"), cursor="hand2")
         self.image_query_entry = ctk.CTkEntry(self.image_query_frame, text_color=("black", "white"), fg_color="transparent", border_width=0, justify="center")
         self.register_input(self.image_query_entry)
+        self.image_query_frame.bind("<Configure>", lambda e: self.update_image_link_display())
 
         self.action_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.action_frame.place(relx=0.5, rely=0.75, anchor="center")
@@ -391,7 +449,8 @@ class MAnkiClient(ctk.CTk):
         self.edit_history_btn.pack(side="left")
 
     def setup_settings_card(self):
-        self.settings_card = ctk.CTkFrame(self.overlay_frame, corner_radius=22, fg_color=("#ffffff", "#2c2c2c"), bg_color="transparent", border_width=1, border_color=("gray80", "gray25"))
+        self.settings_card = ctk.CTkFrame(self, fg_color=("#f5f5f5", "#2c2c2c"), corner_radius=0)
+        self.settings_card.grid(row=0, column=0, sticky="nsew")
         self.settings_title = ctk.CTkLabel(self.settings_card, text="Settings"); self.settings_title.pack(pady=(20, 10))
         self.settings_scroll_frame = ctk.CTkScrollableFrame(self.settings_card, fg_color="transparent", corner_radius=0); self.settings_scroll_frame.pack(fill="both", expand=True, padx=15, pady=5)
 
@@ -435,7 +494,7 @@ class MAnkiClient(ctk.CTk):
         self.lbl_ankiconnect = ctk.CTkLabel(self.settings_scroll_frame, text="AnkiConnect"); self.lbl_ankiconnect.pack(anchor="w", padx=10, pady=(10, 5))
         anki_top = ctk.CTkFrame(self.settings_scroll_frame, fg_color="transparent"); anki_top.pack(fill="x", padx=10, pady=(5, 10))
         self.anki_status_container = ctk.CTkFrame(anki_top, fg_color="transparent"); self.anki_status_container.pack(side="left", anchor="w")
-        
+
         self.lbl_status_prefix = ctk.CTkLabel(self.anki_status_container, text="Status: ", text_color=("black", "white")); self.lbl_status_prefix.pack(side="left")
         self.lbl_status_value = ctk.CTkLabel(self.anki_status_container, text="Unknown❓"); self.lbl_status_value.pack(side="left")
         self.lbl_status_link = ctk.CTkLabel(self.anki_status_container, text=""); self.lbl_status_link.pack(side="left")
@@ -451,11 +510,14 @@ class MAnkiClient(ctk.CTk):
         _, self.lbl_word_field, self.word_field_menu = self._create_dropdown(self.settings_scroll_frame, "Field for TTS", ["—"], "anki_tts_field", "disabled")
         _, self.lbl_audio_field, self.audio_field_menu = self._create_dropdown(self.settings_scroll_frame, "Audio Field", ["—"], "anki_audio_field", "disabled")
         _, self.lbl_image_field, self.image_field_menu = self._create_dropdown(self.settings_scroll_frame, "Image Field", ["—"], "anki_image_field", "disabled")
-        
+
         self.update_image_provider_state()
 
         self.auto_tags_switch = ctk.CTkSwitch(self.settings_scroll_frame, text="Enable Auto-tags (MAnki)", command=lambda: self._on_temp_change("auto_tags", self.auto_tags_switch.get() == 1))
-        self.auto_tags_switch.pack(fill="x", padx=10, pady=(5, 15))
+        self.auto_tags_switch.pack(fill="x", padx=10, pady=(5, 5))
+
+        self.allow_duplicates_switch = ctk.CTkSwitch(self.settings_scroll_frame, text="Allow the creation of duplicate cards", command=lambda: self._on_temp_change("allow_duplicates", self.allow_duplicates_switch.get() == 1))
+        self.allow_duplicates_switch.pack(fill="x", padx=10, pady=(5, 15))
 
         self.lbl_prompt = ctk.CTkLabel(self.settings_scroll_frame, text="Prepared Prompt (Edit for your language and Anki template)"); self.lbl_prompt.pack(anchor="w", padx=10, pady=(10, 5))
         self.prompt_textbox = ctk.CTkTextbox(self.settings_scroll_frame, height=140, corner_radius=20, border_width=2, fg_color=("#F9F9FA", "#343638"), border_color=("#979DA2", "#565B5E"), text_color=("black", "white"))
@@ -469,7 +531,7 @@ class MAnkiClient(ctk.CTk):
         res_cont = ctk.CTkFrame(self.settings_scroll_frame, fg_color="transparent"); res_cont.pack(fill="x", padx=10, pady=(5, 15))
         self.resizable_switch = ctk.CTkSwitch(res_cont, text="Allow window resizing (laggy asf)", command=lambda: self._on_temp_change("resizable", self.resizable_switch.get() == 1)); self.resizable_switch.pack(side="left")
 
-        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.0.0 © 2026 doralz | MIT License", text_color="gray"); self.credits_lbl.pack(pady=(20, 0), anchor="center")
+        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.1.0 © 2026 doralz | MIT License", text_color="gray"); self.credits_lbl.pack(pady=(20, 0), anchor="center")
 
         self.settings_bottom_frame = ctk.CTkFrame(self.settings_card, fg_color="transparent"); self.settings_bottom_frame.pack(side="bottom", fill="x", padx=20, pady=(10, 20))
         self.back_btn = ctk.CTkButton(self.settings_bottom_frame, text="Back", width=90, height=40, corner_radius=20, text_color="#ffffff", text_color_disabled="#aeaeae", cursor="hand2", command=self.hide_settings)
@@ -480,7 +542,8 @@ class MAnkiClient(ctk.CTk):
         self.register_button(self.apply_btn); self.apply_btn.pack(side="right", padx=(0, 10))
 
     def setup_log_card(self):
-        self.log_card = ctk.CTkFrame(self.overlay_frame, corner_radius=28, fg_color=("#ffffff", "#2c2c2c"), bg_color="transparent", border_width=1, border_color=("gray80", "gray25"))
+        self.log_card = ctk.CTkFrame(self, fg_color=("#f5f5f5", "#2c2c2c"), corner_radius=0)
+        self.log_card.grid(row=0, column=0, sticky="nsew")
         self.log_title = ctk.CTkLabel(self.log_card, text="Log"); self.log_title.pack(pady=(20, 10))
         self.log_box = ctk.CTkTextbox(self.log_card, corner_radius=20, fg_color=("#f1f1f1", "gray20"), text_color=("black", "white"))
         self.log_box.pack(fill="both", expand=True, padx=20, pady=10); self.log_box.configure(state="disabled")
@@ -494,8 +557,8 @@ class MAnkiClient(ctk.CTk):
             btn.original_fg_color_tup, btn.hover_color_tup = (fg, fg), (hover, hover)
             btn.target_color_tup = btn.hover_color_tup if btn.cget("state") == "disabled" else btn.original_fg_color_tup
 
-        for switch in [self.auto_switch_switch, self.resizable_switch, self.auto_tags_switch]: switch.configure(progress_color=fg)
-        
+        for switch in [self.auto_switch_switch, self.resizable_switch, self.auto_tags_switch, self.allow_duplicates_switch]: switch.configure(progress_color=fg)
+
         menus = [self.api_menu, self.gemini_model_menu, self.theme_menu, self.color_menu, self.font_menu, self.deck_menu, self.model_menu, self.word_field_menu, self.audio_field_menu, self.image_field_menu, self.tts_menu, getattr(self, 'image_provider_menu', None)]
         for menu in filter(None, menus):
             menu.configure(text_color="#ffffff", button_hover_color=hover)
@@ -503,7 +566,7 @@ class MAnkiClient(ctk.CTk):
                 val = menu.get() if hasattr(menu, "get") else ""
                 menu.original_fg_color_tup = (hover, hover) if (menu.cget("state") == "disabled" or val in ["—", ""]) else (fg, fg)
                 menu.hover_color_tup = (hover, hover); menu.target_color_tup = menu.original_fg_color_tup
-        
+
         if hasattr(self, 'update_anki_menu_hovers'): self.update_anki_menu_hovers()
 
     def apply_font_visually(self, fn):
@@ -513,9 +576,11 @@ class MAnkiClient(ctk.CTk):
         self.send_btn.configure(font=(fn, 22 if self.mining_state == "confirm_cancel" else 18, "bold"))
         for w in [self.del_btn, self.add_btn, self.add_tts_btn]: w.configure(font=(fn, 16, "bold"))
         self.image_status_label.configure(font=(fn, 15, "italic"))
-        if hasattr(self, 'image_query_link'): self.image_query_link.configure(font=(fn, 14, "underline") if isinstance(self.image_query_link.cget("font"), tuple) and "underline" in self.image_query_link.cget("font") else (fn, 14))
+        if hasattr(self, 'image_query_link'):
+            self.image_query_link.configure(font=(fn, 14, "underline") if isinstance(self.image_query_link.cget("font"), tuple) and "underline" in self.image_query_link.cget("font") else (fn, 14))
+            self.update_image_link_display()
 
-        for w in filter(None, [self.api_entry, self.lbl_gemini_model, self.auto_switch_switch, self.resizable_switch, self.auto_tags_switch, self.tts_search_entry, self.lbl_image_provider, self.lbl_status_prefix, self.lbl_status_value, self.test_anki_btn, self.lbl_deck, self.deck_menu, self.lbl_model, self.model_menu, self.lbl_word_field, self.word_field_menu, self.lbl_audio_field, self.audio_field_menu, self.lbl_image_field, self.image_field_menu, self.lbl_theme, self.theme_menu, self.lbl_accent_color, self.color_menu, self.lbl_font_family, self.font_menu, self.log_box]): w.configure(font=(fn, 14))
+        for w in filter(None, [self.api_entry, self.lbl_gemini_model, self.auto_switch_switch, self.resizable_switch, self.auto_tags_switch, self.allow_duplicates_switch, self.tts_search_entry, self.lbl_image_provider, self.lbl_status_prefix, self.lbl_status_value, self.test_anki_btn, self.lbl_deck, self.deck_menu, self.lbl_model, self.model_menu, self.lbl_word_field, self.word_field_menu, self.lbl_audio_field, self.audio_field_menu, self.lbl_image_field, self.image_field_menu, self.lbl_theme, self.theme_menu, self.lbl_accent_color, self.color_menu, self.lbl_font_family, self.font_menu, self.log_box]): w.configure(font=(fn, 14))
         for w in filter(None, [self.lbl_gemini_title, self.lbl_tts_priority, self.lbl_images, self.lbl_ankiconnect, self.lbl_appearance, self.lbl_prompt, self.back_btn, self.done_btn, self.apply_btn, self.close_btn]): w.configure(font=(fn, 14, "bold"))
         self.lbl_api_keys.configure(font=(fn, 14, "bold", "underline")); self.duplicate_label.configure(font=(fn, 14, "underline"))
         for w in filter(None, [self.api_menu, self.gemini_model_menu, self.tts_menu, getattr(self, 'image_provider_menu', None), self.prompt_textbox]): w.configure(font=(fn, 13))
@@ -530,15 +595,15 @@ class MAnkiClient(ctk.CTk):
         for i, service in enumerate(self.temp_tts_chain):
             row = ctk.CTkFrame(self.tts_list_frame, fg_color="transparent"); row.pack(fill="x", pady=2, padx=5)
             ctk.CTkLabel(row, text=f"{i+1}. {service}", font=(self.current_font, 13, "bold"), text_color=("black", "white")).pack(side="left", padx=5)
-            
+
             btn_del = ctk.CTkButton(row, text="✕", width=26, height=26, corner_radius=10, fg_color="#e63946", hover_color="#b02a35", text_color_disabled="#aeaeae", cursor="hand2", command=lambda s=service: self.remove_tts_service(s))
             self.register_button(btn_del); btn_del.pack(side="right", padx=(5, 0))
-            
+
             dn_state = "disabled" if i == chain_len - 1 or chain_len <= 1 else "normal"
             btn_down = ctk.CTkButton(row, text="↓", width=26, height=26, corner_radius=10, fg_color="#144870" if dn_state == "disabled" else "#1f6aa5", hover_color="#144870", text_color_disabled="#aeaeae", state=dn_state, cursor="arrow" if dn_state == "disabled" else "hand2", command=lambda idx=i: self.move_tts(idx, 1))
             btn_down.original_fg_color_tup, btn_down.hover_color_tup = ("#1f6aa5", "#1f6aa5"), ("#144870", "#144870")
             self.register_button(btn_down); btn_down.pack(side="right", padx=2)
-            
+
             up_state = "disabled" if i == 0 or chain_len <= 1 else "normal"
             btn_up = ctk.CTkButton(row, text="↑", width=26, height=26, corner_radius=10, fg_color="#144870" if up_state == "disabled" else "#1f6aa5", hover_color="#144870", text_color_disabled="#aeaeae", state=up_state, cursor="arrow" if up_state == "disabled" else "hand2", command=lambda idx=i: self.move_tts(idx, -1))
             btn_up.original_fg_color_tup, btn_up.hover_color_tup = ("#1f6aa5", "#1f6aa5"), ("#144870", "#144870")
@@ -550,12 +615,11 @@ class MAnkiClient(ctk.CTk):
             self.log_btn.original_fg_color_tup, self.log_btn.hover_color_tup = ("#e0e0e0", "#363636"), ("#d5d5d5", "#454545")
             self.log_btn.target_color_tup = self.log_btn.original_fg_color_tup
             if self.image_status_label.cget("text") in ["Error happened, check the log", "Check the log"]: self.image_status_label.configure(text="")
-        self.overlay_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-        self.log_card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.90, relheight=0.90); self.focus()
+        self.log_card.tkraise(); self.focus()
 
     def hide_log(self):
-        self.log_card.place_forget(); self.overlay_frame.place_forget()
-        
+        self.main_container.tkraise()
+
     def show_settings(self):
         self.temp_api_keys, self.temp_tts_chain = self.api_keys.copy(), self.tts_chain.copy()
         self.temp_active_key.set(self.active_key.get()); self.temp_auto_switch.set(self.auto_switch_key.get())
@@ -565,31 +629,31 @@ class MAnkiClient(ctk.CTk):
         self.temp_anki_tts_field.set(self.anki_tts_field); self.temp_anki_audio_field.set(self.anki_audio_field)
         self.temp_anki_image_field.set(self.anki_image_field)
         self.temp_image_provider.set(self.current_image_provider); self.temp_resizable.set(self.resizable_window.get())
-        self.temp_auto_tags.set(self.auto_tags.get())
+        self.temp_auto_tags.set(self.auto_tags.get()); self.temp_allow_duplicates.set(self.allow_duplicates.get())
 
         self.update_menu_values(temp_mode=True)
         self.auto_switch_switch.select() if self.temp_auto_switch.get() else self.auto_switch_switch.deselect()
         self.resizable_switch.select() if self.temp_resizable.get() else self.resizable_switch.deselect()
         self.auto_tags_switch.select() if self.temp_auto_tags.get() else self.auto_tags_switch.deselect()
-        
+        self.allow_duplicates_switch.select() if self.temp_allow_duplicates.get() else self.allow_duplicates_switch.deselect()
+
         self.gemini_model_menu.set(self.current_gemini_model); self.theme_menu.set(self.temp_theme.get()); self.color_menu.set(self.temp_accent.get())
         self.font_menu.set(self.temp_font.get()); self.image_provider_menu.set(self.current_image_provider)
-        
+
         self.test_anki_connection(); self.refresh_tts_ui(); self.update_image_provider_state(); self.update_anki_menu_hovers()
 
         if hasattr(self, 'prompt_textbox') and self.prompt_textbox.winfo_exists():
             self.prompt_textbox.delete("1.0", ctk.END); self.prompt_textbox.insert("1.0", self.prepared_prompt)
 
         self.set_widget_state(self.apply_btn, "disabled")
-        self.overlay_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-        self.settings_card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.90, relheight=0.90)
+        self.settings_card.tkraise()
         try: self.settings_scroll_frame._parent_canvas.yview_moveto(0)
         except Exception: pass
         self.api_entry.configure(placeholder_text="New key..."); self.tts_search_entry.configure(placeholder_text="Search TTS..."); self.focus()
 
     def hide_settings(self):
         self.api_entry.delete(0, ctk.END); self.tts_search_entry.delete(0, ctk.END)
-        self.filter_tts_services(); self.settings_card.place_forget(); self.overlay_frame.place_forget()
+        self.filter_tts_services(); self.main_container.tkraise()
 
     def show_history_menu(self):
         menu = tk.Menu(self, tearoff=0)
@@ -597,7 +661,7 @@ class MAnkiClient(ctk.CTk):
         menu.configure(bg="#2c2c2c" if mode == "Dark" else "#ffffff", fg="#ffffff" if mode == "Dark" else "#000000", activebackground=fg, activeforeground="#ffffff", font=(self.current_font, 13))
         if not self.mined_history: menu.add_command(label="No words mined yet", state="disabled")
         else:
-            for word, note_id in reversed(self.mined_history): menu.add_command(label=word, command=lambda nid=note_id: self.anki.invoke("guiEditNote", note=nid))
+            for word, note_id in reversed(self.mined_history): menu.add_command(label=word, command=lambda nid=note_id: self.anki.invoke("guiBrowse", query=f"nid:{nid}"))
         menu.post(self.edit_history_btn.winfo_rootx(), self.edit_history_btn.winfo_rooty() + self.edit_history_btn.winfo_height())
 
     def open_image_search(self):
@@ -656,10 +720,10 @@ class MAnkiClient(ctk.CTk):
         if not self.anki_deck or not self.anki_model: return self.after(0, self.reset_duplicate_ui)
         model_fields = self.anki.invoke('modelFieldNames', modelName=self.anki_model)
         if not model_fields: return self.after(0, self.reset_duplicate_ui)
-            
+
         first_field = model_fields[0]
         note_ids = self.anki.invoke('findNotes', query=f'deck:"{self.anki_deck}" note:"{self.anki_model}" "{first_field}:{word}"')
-        
+
         if note_ids:
             for note in self.anki.invoke('notesInfo', notes=note_ids) or []:
                 clean_field = html.unescape(re.sub(r'<[^>]+>', '', note.get('fields', {}).get(first_field, {}).get('value', '').strip())).lower()
@@ -672,12 +736,15 @@ class MAnkiClient(ctk.CTk):
         self.current_duplicate_query = query
         self.duplicate_label.configure(text="Duplicate!"); self.duplicate_label.place(relx=0.5, rely=0.33, anchor="center")
         self.input_entry.configure(border_color="#e63946")
+        if not self.allow_duplicates.get():
+            self.set_widget_state(self.send_btn, "disabled")
 
     def reset_duplicate_ui_if_matching(self, checked_word):
         if self.input_entry.get().strip().lower() == checked_word.lower() or not self.input_entry.get().strip(): self.reset_duplicate_ui()
 
     def reset_duplicate_ui(self):
         self.duplicate_label.place_forget(); self.input_entry.configure(border_color=self.default_entry_border_color)
+        if self.mining_state == "idle": self.set_widget_state(self.send_btn, "normal")
 
     def update_menu_values(self, temp_mode=False):
         keys_list, active_var = (self.temp_api_keys, self.temp_active_key) if temp_mode else (self.api_keys, self.active_key)
@@ -732,13 +799,13 @@ class MAnkiClient(ctk.CTk):
                     for menu, vals in [(self.deck_menu, decks), (self.model_menu, models)]:
                         self.set_widget_state(menu, "normal"); menu.configure(values=vals)
                     self.set_widget_state(self.word_field_menu, "normal"); self.set_widget_state(self.audio_field_menu, "normal"); self.set_widget_state(self.image_field_menu, "normal")
-                    
+
                     if self.temp_anki_deck.get() in decks: self.deck_menu.set(self.temp_anki_deck.get())
                     elif decks: self.deck_menu.set(decks[0]); self.temp_anki_deck.set(decks[0])
-                        
+
                     if self.temp_anki_model.get() in models: self.model_menu.set(self.temp_anki_model.get()); self.update_audio_fields(self.temp_anki_model.get())
                     elif models: self.model_menu.set(models[0]); self.temp_anki_model.set(models[0]); self.update_audio_fields(models[0])
-                        
+
                     self.update_image_provider_state(); self.update_anki_menu_hovers(); self.on_setting_changed()
                 else:
                     self.lbl_status_value.configure(text="❌ Error (Open Anki & Check ", text_color="#e63946")
@@ -774,7 +841,7 @@ class MAnkiClient(ctk.CTk):
             threading.Thread(target=self.anki.invoke, args=("deleteNotes",), kwargs={"notes": [self.current_mining_note_id]}, daemon=True).start()
             self.write_log(f"\n⚠️ Mining cancelled. Card {self.current_mining_note_id} deleted.", trigger_warning=False)
         else: self.write_log("\n⚠️ Mining cancelled before card creation.", trigger_warning=False)
-            
+
         self.image_status_label.configure(text=""); self.image_query_frame.place_forget()
         self.current_mining_note_id = None; self.mining_state = "idle"
         self.reset_ui_state(); self.on_input_key_release(None)
@@ -820,7 +887,7 @@ class MAnkiClient(ctk.CTk):
 
         current_api_key = next((k for k in self.api_keys if self.censor_key(k) == self.active_key.get()), "")
         if not current_api_key: messagebox.showwarning("MAnki", "Please add an API key"); return self.show_settings()
-        
+
         user_text = self.input_entry.get().strip()
         if not user_text: return
 
@@ -829,7 +896,7 @@ class MAnkiClient(ctk.CTk):
         self.waiting_for_image = self.mining_cancelled = False
         self.current_mining_note_id = self.pending_note_dict = None
         self.current_fade_id += 1; self.mining_state = "mining"
-        
+
         self.set_widget_state(self.send_btn, "normal"); self.send_btn.configure(text="⛏️ Mining..."); self.send_btn.target_color_tup = self.send_btn.hover_color_tup
         self.write_log(f"----------------------------------------\nPrompt: {user_text}", clear=False)
         threading.Thread(target=self.fetch_from_api, args=(user_text, current_api_key), daemon=True).start()
@@ -837,14 +904,14 @@ class MAnkiClient(ctk.CTk):
     def fetch_from_api(self, text, initial_api_key):
         if self.mining_cancelled: return
         keys_to_try = [initial_api_key] + ([k for k in self.api_keys if k != initial_api_key] if self.auto_switch_key.get() else [])
-            
+
         for key in keys_to_try:
             if self.mining_cancelled: return
             try:
                 if key != initial_api_key:
                     self.after(0, self.update_key_ui_from_thread, self.censor_key(key))
                     self.after(0, self.write_log, f"\n[Auto-Switch] Switching to API key: {self.censor_key(key)}...")
-                
+
                 model = self.GEMINI_MODELS.get(self.current_gemini_model, 'gemini-3.1-flash-lite')
                 data = GeminiClient.generate_flashcard(text, key, self.prepared_prompt, model)
                 if not self.mining_cancelled: return self.after(0, self.process_success_payload, data, text)
@@ -860,7 +927,7 @@ class MAnkiClient(ctk.CTk):
                 raw_response = json.dumps(data, ensure_ascii=False, indent=4)
             else:
                 raw_response = str(data)
-                
+
             self.write_log(f"\nLLM:\n{raw_response}\n")
 
             if self.anki_deck and self.anki_model: threading.Thread(target=self.resolve_tts_and_export, args=(raw_word, data), daemon=True).start()
@@ -873,7 +940,7 @@ class MAnkiClient(ctk.CTk):
     def resolve_tts_and_export(self, raw_word, data):
         if self.mining_cancelled: return
         audio_url = None
-        
+
         word_to_voice = data.get("word", raw_word)
         if self.anki_tts_field and self.anki_tts_field not in ["No fields", "None", "—", ""]:
             model_fields = self.anki.invoke('modelFieldNames', modelName=self.anki_model)
@@ -901,16 +968,28 @@ class MAnkiClient(ctk.CTk):
             self.write_log(f"\n❌ Error: Could not retrieve fields for '{self.anki_model}'"); self.show_error_state()
             self.mining_state = "idle"; self.reset_ui_state()
             return
-            
+
         note_fields = {k: str(v) for k, v in data.items() if k in model_fields}
         if not note_fields:
             llm_values = [v for k, v in data.items() if k != "image_query"]
             note_fields = {model_fields[i]: str(val) for i, val in enumerate(llm_values) if i < len(model_fields)}
-            
-        note = {"deckName": self.anki_deck, "modelName": self.anki_model, "fields": note_fields, "options": {"allowDuplicate": False, "duplicateScope": "deck"}, "tags": ["MAnki"] if self.auto_tags.get() else []}
-        
+
         actual_word = data.get("word", raw_word)
-        
+
+        if not self.allow_duplicates.get():
+            first_field = model_fields[0]
+            check_val = note_fields.get(first_field, actual_word)
+            duplicate_ids = self.anki.invoke('findNotes', query=f'deck:"{self.anki_deck}" note:"{self.anki_model}" "{first_field}:{check_val}"')
+            if duplicate_ids:
+                for note_info in self.anki.invoke('notesInfo', notes=duplicate_ids) or []:
+                    clean_field = html.unescape(re.sub(r'<[^>]+>', '', note_info.get('fields', {}).get(first_field, {}).get('value', '').strip())).lower()
+                    if clean_field == check_val.lower():
+                        self.write_log(f"\n❌ Mining cancelled: Duplicate card found for '{actual_word}'.")
+                        self.show_error_state(); self.mining_state = "idle"; self.reset_ui_state()
+                        return
+
+        note = {"deckName": self.anki_deck, "modelName": self.anki_model, "fields": note_fields, "options": {"allowDuplicate": self.allow_duplicates.get(), "duplicateScope": "deck"}, "tags": ["MAnki"] if self.auto_tags.get() else []}
+
         if audio_url and self.anki_audio_field and self.anki_audio_field in model_fields: note["audio"] = [{"url": audio_url, "filename": f"manki_{actual_word}.mp3", "fields": [self.anki_audio_field]}]
 
         self.current_mining_word = actual_word
@@ -924,7 +1003,7 @@ class MAnkiClient(ctk.CTk):
             self.pending_note_dict = None
             note_id = self.anki.invoke('addNote', note=note)
             if self.mining_cancelled: return self.anki.invoke("deleteNotes", notes=[note_id]) if note_id else None
-            
+
             if note_id:
                 self.write_log("\n✅ Successfully added to Anki"); self.mined_history.append((self.current_mining_word, note_id))
             else: self.write_log("\n❌ Failed to add note (Duplicate or Anki error)."); self.show_error_state()
@@ -933,27 +1012,54 @@ class MAnkiClient(ctk.CTk):
     def start_waiting_for_image(self):
         self.image_status_label.configure(text="Waiting for Image... (Copy any Image)", text_color="#e159ff")
         fallback_query, has_provider = getattr(self, "current_image_query", self.current_mining_word), self.current_image_provider not in ["None", "—"]
-        
+
         self.image_query_link.pack_forget(); self.image_query_link.unbind("<Button-1>")
         if hasattr(self, 'image_query_entry'): self.image_query_entry.pack_forget()
-        
+
         if has_provider:
+            self.full_image_query = fallback_query
             self.image_query_link.configure(text=fallback_query, text_color=("#1a73e8", "#4da3ff"), font=(self.current_font, 14, "underline"), cursor="hand2")
-            self.image_query_link.bind("<Button-1>", lambda e: self.open_image_search()); self.image_query_link.pack(side="top")
+            self.image_query_link.bind("<Button-1>", lambda e: self.open_image_search()); self.image_query_link.pack(side="top", fill="x")
             self.current_image_url = ImageProvider.get_image_url(fallback_query, self.current_image_provider)
+            self.update_image_link_display()
         else:
             self.current_image_url = ""
             if getattr(self, "current_image_query_actual", ""):
                 self.image_query_entry.configure(state="normal"); self.image_query_entry.delete(0, "end"); self.image_query_entry.insert(0, self.current_image_query_actual)
                 self.image_query_entry.configure(state="readonly"); self.image_query_entry.pack(side="top", fill="x", expand=True, pady=2)
-                
+
         self.image_query_frame.place(relx=0.5, rely=0.60, anchor="center", relwidth=0.85)
-        
+        self.update_image_link_display()
+
         try: self.initial_clipboard_image = ImageGrab.grabclipboard() if os.name == 'nt' else self.get_linux_mac_clipboard_image()
         except Exception: self.initial_clipboard_image = None
-            
+
         self.waiting_for_image = True
         self.poll_clipboard_for_image() if os.name == 'nt' else (setattr(self, '_last_clipboard_check', time.time()), self.poll_clipboard_for_image(single_check=True))
+
+    def update_image_link_display(self, event=None):
+        if not getattr(self, "waiting_for_image", False) or getattr(self, "current_image_provider", "None") in ["None", "—"]:
+            return
+        raw_text = getattr(self, "full_image_query", "")
+        if not raw_text:
+            return
+        frame_w = self.image_query_frame.winfo_width()
+        if frame_w <= 1:
+            frame_w = int(self.winfo_width() * 0.85) if self.winfo_width() > 1 else 460
+        if frame_w > 20:
+            f = tkfont.Font(family=self.current_font, size=14, underline=1)
+            if f.measure(raw_text) <= frame_w:
+                display_text = raw_text
+            else:
+                display_text = raw_text
+                for i in range(len(raw_text), 0, -1):
+                    t = raw_text[:i] + "..."
+                    if f.measure(t) <= frame_w:
+                        display_text = t
+                        break
+            self.image_query_link.configure(text=display_text)
+        else:
+            self.image_query_link.configure(text=raw_text)
 
     def get_linux_mac_clipboard_image(self):
         if sys.platform == "darwin":
@@ -985,7 +1091,7 @@ class MAnkiClient(ctk.CTk):
             buffered = BytesIO(); img.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
             filename = f"manki_img_{word.lower().replace(' ', '_')}_{int(time.time())}.png"
-            
+
             if self.anki.invoke("storeMediaFile", filename=filename, data=img_base64):
                 img_tag = f'<img src="{filename}">'
                 if getattr(self, 'pending_note_dict', None):
@@ -1003,7 +1109,7 @@ class MAnkiClient(ctk.CTk):
         except Exception as e: self.after(0, self._fail_image_upload, f"\n❌ Image export error: {str(e)}")
 
     def on_image_added_success(self, word):
-        self.image_status_label.configure(text=f'Word "{word}" has been added', text_color="#2a9d8f"); self.image_query_frame.place_forget() 
+        self.image_status_label.configure(text=f'Word "{word}" has been added', text_color="#2a9d8f"); self.image_query_frame.place_forget()
         self.write_log(f'\n✅ "{word}" Successfully added to Anki')
         self.mining_state = "idle"; self.reset_ui_state(); self.on_input_key_release(None)
         self.current_fade_id += 1; fade_id = self.current_fade_id
@@ -1018,7 +1124,7 @@ class MAnkiClient(ctk.CTk):
     def animate_text_fade(self, step, total_steps, fade_id):
         if fade_id != self.current_fade_id: return
         if step > total_steps: return self.image_status_label.configure(text="")
-            
+
         r1, g1, b1, r2, g2, b2 = 42, 157, 143, *(int(("#f5f5f5" if ctk.get_appearance_mode() == "Light" else "#2c2c2c")[i:i+2], 16) for i in (1, 3, 5))
         fraction = step / total_steps
         current_color = f"#{int(r1 + (r2 - r1) * fraction):02x}{int(g1 + (g2 - g1) * fraction):02x}{int(b1 + (b2 - b1) * fraction):02x}"
