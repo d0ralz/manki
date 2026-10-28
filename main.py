@@ -1,10 +1,10 @@
 import customtkinter as ctk, tkinter as tk, tkinter.messagebox as messagebox, tkinter.font as tkfont
-import threading, json, os, sys, urllib.parse, re, webbrowser, base64, time, ctypes, subprocess, html
+import threading, json, os, sys, urllib.parse, re, webbrowser, base64, time, ctypes, subprocess, html, tempfile
 from io import BytesIO
 from pathlib import Path
 from PIL import ImageGrab, Image
 from anki import AnkiClient
-from services import GeminiClient, TTSProvider, ImageProvider
+from services import GeminiClient, GeminiJSONError, TTSProvider, ImageProvider
 
 def resource_path(relative_path):
     try: base_path = sys._MEIPASS
@@ -21,9 +21,15 @@ SETTINGS_FILE, API_FILE = os.path.join(config_dir, "settings.json"), os.path.joi
 class MAnkiClient(ctk.CTk):
     GOOGLE_LANGS = "en-US,en-GB,en-AU,en-IN,ru-RU,es-ES,es-MX,fr-FR,fr-CA,de-DE,it-IT,pt-PT,pt-BR,ja-JP,ko-KR,zh-CN,zh-TW,ar-SA,hi-IN,nl-NL,pl-PL,tr-TR,uk-UA,vi-VN,th-TH,id-ID,sv-SE,da-DK,fi-FI,no-NO,cs-CZ,el-GR,hu-HU,ro-RO,sk-SK,af,sq,am,hy,az,eu,be,bn,bs,bg,ca,ceb,ny,co,hr,eo,et,tl,fy,gl,ka,gu,ht,ha,haw,iw,hmn,is,ig,ga,jw,kn,kk,km,rw,ku,ky,lo,la,lv,lt,lb,mk,mg,ms,ml,mt,mi,mr,mn,my,ne,or,ps,fa,pa,sm,gd,sr,st,sn,sd,si,sl,so,su,sw,tg,ta,tt,te,tk,ur,ug,uz,cy,xh,yi,yo,zu".split(",")
 
+    # Stable text-generation models listed in the official Gemini API docs.
+    # Keep non-text endpoints, shut-down models, and restricted legacy models out
+    # of this menu because this app expects a text response in JSON format.
     GEMINI_MODELS = {
-        "Gemini 2.5 Flash": "gemini-2.5-flash", "Gemini 2.5 Flash Lite": "gemini-2.5-flash-lite", "Gemini 2.5 Pro": "gemini-2.5-pro",
-        "Gemini 3 Flash": "gemini-3-flash-preview", "Gemini 3.1 Pro": "gemini-3.1-pro-preview", "Gemini 3.1 Flash Lite": "gemini-3.1-flash-lite", "Gemini 3.5 Flash": "gemini-3.5-flash"
+        "Gemini 4 Argon": "gemini-4-argon",
+        "Gemini 3.8 Flash": "gemini-3.8-flash",
+        "Gemini 3.6 Flash": "gemini-3.6-flash",
+        "Gemini 3.5 Flash Lite": "gemini-3.5-flash-lite",
+        "Gemini 3.1 Flash Lite": "gemini-3.1-flash-lite",
     }
 
     ACCENT_COLORS = {
@@ -32,8 +38,8 @@ class MAnkiClient(ctk.CTk):
     }
 
     def __init__(self):
-        super().__init__(className="MAnki v1.1.0")
-        self.title("MAnki v1.1.0")
+        super().__init__(className="MAnki v1.1.1")
+        self.title("MAnki v1.1.1")
         self.geometry("550x450")
         self.minsize(550, 450)
         self.configure(fg_color=("#f5f5f5", "#2c2c2c"))
@@ -143,7 +149,7 @@ class MAnkiClient(ctk.CTk):
         self.api_keys, self.mined_history = [], []
 
         self.active_key, self.auto_switch_key = ctk.StringVar(value="No keys selected"), ctk.BooleanVar(value=False)
-        self.current_gemini_model, self.current_theme, self.current_accent, self.current_font = "Gemini 3.1 Flash Lite", "System", "Blue", "Arial"
+        self.current_gemini_model, self.current_theme, self.current_accent, self.current_font = "Gemini 3.8 Flash", "System", "Blue", "Arial"
         self.resizable_window, self.auto_tags, self.allow_duplicates = ctk.BooleanVar(value=False), ctk.BooleanVar(value=True), ctk.BooleanVar(value=False)
 
         self.default_prompt = ("⬇  ⬇  ⬇  ENSURE TO DELETE THIS AFTER READING   ⬇  ⬇  ⬇\n\nhi! here you can configure which lines the LLM will generate and\ntheir content. it works quite easily. you need to enter the exact\nname of the field from your anki card model in quotation marks,\nand then, after a colon, write the desired content for that field\nlike this:\n\"FIELD_NAME\": CONTENT\n\"FIELD_NAME2\": CONTENT2\n...\nif you're using image provider feature, use the field name\n\"image_query\". otherwise, it won't work. remember that you can\ngive your own instructions to the llm (for example, to bold a\nword in a sentence)\nthere's example of prepared prompt below:\n\n⬆  ⬆  ⬆   ENSURE TO DELETE THIS AFTER READING   ⬆  ⬆  ⬆\n\nYou are a flashcard assistant. For the word provided, return STRICTLY a JSON object with these exact keys:\n\"word\": the word itself\n\"sentence\": a descriptive example sentence\n\"definition\": LANG definition\n\"translation\": LANG translation\n\"image_query\": a visual description to find an image for this word (short and easy for stock photo providers)\nReturn ONLY valid JSON without markdown blocks.")
@@ -316,7 +322,7 @@ class MAnkiClient(ctk.CTk):
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f: d = json.load(f)
                 self.auto_switch_key.set(d.get("auto_switch", True))
                 self.current_gemini_model = d.get("gemini_model", "Gemini 3.1 Flash Lite")
-                if self.current_gemini_model not in self.GEMINI_MODELS: self.current_gemini_model = "Gemini 3.1 Flash Lite"
+                if self.current_gemini_model not in self.GEMINI_MODELS: self.current_gemini_model = "Gemini 3.8 Flash"
                 self.current_theme, self.current_accent, self.current_font = d.get("theme", "System"), d.get("accent_color", "Blue"), d.get("font_family", "Arial")
                 self.prepared_prompt = d.get("prepared_prompt", self.prepared_prompt)
                 self.anki_deck, self.anki_model, self.anki_tts_field, self.anki_audio_field, self.anki_image_field = d.get("anki_deck", ""), d.get("anki_model", ""), d.get("anki_tts_field", ""), d.get("anki_audio_field", ""), d.get("anki_image_field", "")
@@ -531,7 +537,7 @@ class MAnkiClient(ctk.CTk):
         res_cont = ctk.CTkFrame(self.settings_scroll_frame, fg_color="transparent"); res_cont.pack(fill="x", padx=10, pady=(5, 15))
         self.resizable_switch = ctk.CTkSwitch(res_cont, text="Allow window resizing (laggy asf)", command=lambda: self._on_temp_change("resizable", self.resizable_switch.get() == 1)); self.resizable_switch.pack(side="left")
 
-        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.1.0 © 2026 doralz | MIT License", text_color="gray"); self.credits_lbl.pack(pady=(20, 0), anchor="center")
+        self.credits_lbl = ctk.CTkLabel(self.settings_scroll_frame, text="MAnki v1.1.1 © 2026 doralz | MIT License", text_color="gray"); self.credits_lbl.pack(pady=(20, 0), anchor="center")
 
         self.settings_bottom_frame = ctk.CTkFrame(self.settings_card, fg_color="transparent"); self.settings_bottom_frame.pack(side="bottom", fill="x", padx=20, pady=(10, 20))
         self.back_btn = ctk.CTkButton(self.settings_bottom_frame, text="Back", width=90, height=40, corner_radius=20, text_color="#ffffff", text_color_disabled="#aeaeae", cursor="hand2", command=self.hide_settings)
@@ -912,10 +918,19 @@ class MAnkiClient(ctk.CTk):
                     self.after(0, self.update_key_ui_from_thread, self.censor_key(key))
                     self.after(0, self.write_log, f"\n[Auto-Switch] Switching to API key: {self.censor_key(key)}...")
 
-                model = self.GEMINI_MODELS.get(self.current_gemini_model, 'gemini-3.1-flash-lite')
+                model = self.GEMINI_MODELS.get(self.current_gemini_model, 'gemini-3.8-flash')
                 data = GeminiClient.generate_flashcard(text, key, self.prepared_prompt, model)
                 if not self.mining_cancelled: return self.after(0, self.process_success_payload, data, text)
-            except Exception as e: self.after(0, self.write_log, f"\nERR ({self.censor_key(key)}):\n{str(e)}")
+            except GeminiJSONError as e:
+                # Switching API keys will not fix malformed model output; GeminiClient
+                # already retried the response once using this same key.
+                self.after(0, self.write_log, f"\nJSON RESPONSE ERROR ({self.censor_key(key)}):\n{str(e)}")
+                self.after(0, self.on_api_error,
+                           "Gemini could not produce valid JSON after a repair attempt. "
+                           "Check the Prepared Prompt and try again.")
+                return
+            except Exception as e:
+                self.after(0, self.write_log, f"\nERR ({self.censor_key(key)}):\n{str(e)}")
 
         self.after(0, self.on_api_error, "All available API keys failed!")
 
@@ -938,10 +953,17 @@ class MAnkiClient(ctk.CTk):
             self.write_log(f"\nData Processing Error:\n{str(e)}"); self.show_error_state(); self.mining_state = "idle"; self.reset_ui_state()
 
     def resolve_tts_and_export(self, raw_word, data):
-        if self.mining_cancelled: return
-        audio_url = None
+        """Resolve pronunciation, download it in MAnki, and store it in Anki media.
 
+        Do not pass a remote URL through note["audio"]: Anki would download it
+        itself without the Oxford/Cambridge request headers, which can cause 403.
+        """
+        if self.mining_cancelled:
+            return
+
+        audio_filename = None
         word_to_voice = data.get("word", raw_word)
+
         if self.anki_tts_field and self.anki_tts_field not in ["No fields", "None", "—", ""]:
             model_fields = self.anki.invoke('modelFieldNames', modelName=self.anki_model)
             if model_fields:
@@ -953,15 +975,65 @@ class MAnkiClient(ctk.CTk):
 
             if self.anki_audio_field and self.anki_audio_field not in ["No fields", "None", "—", ""]:
                 for service in self.tts_chain:
-                    if self.mining_cancelled: return
-                    if audio_url := TTSProvider.get_audio_url(word_to_voice, service): self.after(0, self.write_log, f"✅ TTS Fetched from {service}"); break
-                if not audio_url and self.tts_chain: self.after(0, self.write_log, "⚠️ All configured TTS services failed.")
-            else: self.after(0, self.write_log, "⏭️ Audio field is 'None', skipping TTS.")
-        else: self.after(0, self.write_log, "⏭️ TTS field is 'None', skipping TTS.")
+                    if self.mining_cancelled:
+                        return
 
-        if not self.mining_cancelled: self.after(0, self.export_to_anki, data, audio_url, raw_word)
+                    audio_url = TTSProvider.get_audio_url(word_to_voice, service)
+                    if not audio_url:
+                        continue
 
-    def export_to_anki(self, data, audio_url, raw_word="word"):
+                    self.after(0, self.write_log, f"🔎 TTS URL found via {service}; downloading audio...")
+                    audio_filename = self._download_and_store_tts(audio_url, word_to_voice, service)
+                    if audio_filename:
+                        self.after(0, self.write_log, f"✅ TTS downloaded from {service} and stored in Anki media.")
+                        break
+
+                    detail = getattr(TTSProvider, "last_download_error", None)
+                    message = f"⚠️ Audio download failed for {service}"
+                    if detail:
+                        message += f": {detail}"
+                    message += "; trying the next provider."
+                    self.after(0, self.write_log, message)
+
+                if not audio_filename and self.tts_chain:
+                    self.after(0, self.write_log, "⚠️ All configured TTS services failed to provide downloadable audio.")
+            else:
+                self.after(0, self.write_log, "⏭️ Audio field is 'None', skipping TTS.")
+        else:
+            self.after(0, self.write_log, "⏭️ TTS field is 'None', skipping TTS.")
+
+        if not self.mining_cancelled:
+            self.after(0, self.export_to_anki, data, audio_filename, raw_word)
+
+    def _download_and_store_tts(self, audio_url, word, service):
+        """Download remote TTS using TTSProvider, then upload bytes to AnkiConnect."""
+        safe_word = re.sub(r"[^A-Za-z0-9_-]+", "_", str(word).strip()).strip("_")[:70] or "audio"
+        filename = f"manki_{safe_word}_{int(time.time() * 1000)}.mp3"
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="manki_tts_") as temp_dir:
+                local_path = os.path.join(temp_dir, filename)
+                if not TTSProvider.download_audio(audio_url, local_path):
+                    return None
+
+                with open(local_path, "rb") as audio_file:
+                    audio_base64 = base64.b64encode(audio_file.read()).decode("ascii")
+
+                stored_filename = self.anki.invoke(
+                    "storeMediaFile",
+                    filename=filename,
+                    data=audio_base64,
+                )
+
+                if isinstance(stored_filename, str) and stored_filename.strip():
+                    return stored_filename
+                self.after(0, self.write_log, f"⚠️ AnkiConnect did not store audio for {service}.")
+                return None
+        except Exception as e:
+            self.after(0, self.write_log, f"⚠️ Could not download/store audio from {service}: {e}")
+            return None
+
+    def export_to_anki(self, data, audio_filename, raw_word="word"):
         if self.mining_cancelled: return
         model_fields = self.anki.invoke('modelFieldNames', modelName=self.anki_model)
         if not model_fields:
@@ -988,9 +1060,12 @@ class MAnkiClient(ctk.CTk):
                         self.show_error_state(); self.mining_state = "idle"; self.reset_ui_state()
                         return
 
-        note = {"deckName": self.anki_deck, "modelName": self.anki_model, "fields": note_fields, "options": {"allowDuplicate": self.allow_duplicates.get(), "duplicateScope": "deck"}, "tags": ["MAnki"] if self.auto_tags.get() else []}
+        # The media is already uploaded; link it with Anki's local sound tag.
+        # This avoids Anki trying to fetch the Oxford URL and receiving HTTP 403.
+        if audio_filename and self.anki_audio_field and self.anki_audio_field in model_fields:
+            note_fields[self.anki_audio_field] = f"[sound:{audio_filename}]"
 
-        if audio_url and self.anki_audio_field and self.anki_audio_field in model_fields: note["audio"] = [{"url": audio_url, "filename": f"manki_{actual_word}.mp3", "fields": [self.anki_audio_field]}]
+        note = {"deckName": self.anki_deck, "modelName": self.anki_model, "fields": note_fields, "options": {"allowDuplicate": self.allow_duplicates.get(), "duplicateScope": "deck"}, "tags": ["MAnki"] if self.auto_tags.get() else []}
 
         self.current_mining_word = actual_word
         self.current_image_query_actual, self.current_image_query = data.get("image_query", ""), data.get("image_query", self.current_mining_word)
