@@ -20,7 +20,6 @@ class GeminiClient:
             raise GeminiJSONError("Gemini returned an empty response instead of a JSON object.")
 
         candidate = text.strip()
-        # Be tolerant of code fences in case a model or endpoint ignores JSON mode.
         if candidate.startswith("```"):
             candidate = re.sub(r"^```(?:json)?\s*", "", candidate, count=1, flags=re.IGNORECASE)
             candidate = re.sub(r"\s*```$", "", candidate, count=1).strip()
@@ -52,8 +51,6 @@ class GeminiClient:
             "comments, or any text before or after the JSON object. Preserve the requested fields."
         )
 
-        # A schema with unrestricted properties preserves user-customizable Anki fields
-        # while asking Gemini's constrained decoder to produce syntactically valid JSON.
         chat = client.chats.create(
             model=model_name,
             config={
@@ -68,7 +65,6 @@ class GeminiClient:
         try:
             return GeminiClient._parse_json_object(response.text)
         except GeminiJSONError as first_error:
-            # Retry once with the same key: a formatting failure is not an API-key failure.
             repair_prompt = (
                 "Your previous reply could not be parsed as a JSON object. Regenerate the "
                 "same answer for the original word and instructions. Return only one valid "
@@ -103,9 +99,6 @@ class _CambridgePageParser(HTMLParser):
         elif tag.lower() == "h1":
             self._capture_h1 = True
 
-        # Cambridge currently exposes pronunciation clips through data-src-mp3.
-        # Read that attribute from each individual audio button instead of taking
-        # the first mp3 anywhere on the page (which may be the site's word of day).
         audio_url = attrs.get("data-src-mp3")
         if not audio_url and tag.lower() in {"audio", "source"}:
             audio_url = attrs.get("src")
@@ -137,12 +130,10 @@ class _CambridgePageParser(HTMLParser):
 
 
 class TTSProvider:
-    # Reuse cookies between dictionary-page parsing and MP3 download.
     _cookie_jar = http.cookiejar.CookieJar()
     _opener = urllib.request.build_opener(
         urllib.request.HTTPCookieProcessor(_cookie_jar)
     )
-    # Retain the exact dictionary page that provided each audio URL.
     _audio_referers = {}
     last_download_error = None
 
@@ -194,7 +185,6 @@ class TTSProvider:
             headers=TTSProvider._headers_for_url(url),
         )
         with TTSProvider._opener.open(req, timeout=10) as response:
-            # Use the response's declared charset when present, with UTF-8 fallback.
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, errors="replace")
 
@@ -213,8 +203,6 @@ class TTSProvider:
             value = unescape(str(value or "")).strip()
             if not value:
                 continue
-            # Titles commonly look like "FROZEN | Pronunciation in English";
-            # dedicated pages may instead say "English pronunciation of frozen".
             value = re.split(r"\s*[|–—]\s*", value, maxsplit=1)[0].strip()
             value = re.sub(
                 r"^(?:english\s+)?pronunciation\s+of\s+", "", value,
@@ -256,9 +244,6 @@ class TTSProvider:
 
             elif service.startswith("Cambridge"):
                 region = "uk" if "UK" in service.upper() else "us"
-                        # The dedicated pronunciation page is preferable to the full entry:
-                # dictionary pages can contain several headwords and site-wide audio
-                # (including the Word of the Day, often "frozen").
                 page_urls = [
                     f"https://dictionary.cambridge.org/pronunciation/english/{quoted_formatted}",
                     f"https://dictionary.cambridge.org/dictionary/english/{quoted_formatted}",
@@ -270,8 +255,6 @@ class TTSProvider:
                     except urllib.error.HTTPError as e:
                         if e.code == 404:
                             continue
-                        # A dictionary entry may still be available when the dedicated
-                        # pronunciation endpoint is blocked or unavailable.
                         if page_index == 0:
                             print(f"Cambridge pronunciation page unavailable ({e}); trying dictionary entry.")
                             continue
@@ -291,19 +274,12 @@ class TTSProvider:
                             continue
                         region_audios.append(audio)
 
-                    # Highest confidence: the audio button explicitly names the
-                    # requested word. This prevents selecting unrelated clips even
-                    # if Cambridge includes several pronunciations on one page.
                     for audio in region_audios:
                         if TTSProvider._cambridge_audio_matches_word(audio["title"], word):
                             audio_url = urljoin(page_url, audio["url"])
                             TTSProvider._audio_referers[audio_url] = page_url
                             return audio_url
 
-                    # On a verified dedicated pronunciation page, the first audio
-                    # button for that region is the primary pronunciation. Accept
-                    # only untitled buttons here; never substitute an explicitly
-                    # labelled clip for another word.
                     is_pronunciation_page = "/pronunciation/english/" in page_url
                     if is_pronunciation_page and page_matches_word:
                         for audio in region_audios:
@@ -311,10 +287,6 @@ class TTSProvider:
                                 audio_url = urljoin(page_url, audio["url"])
                                 TTSProvider._audio_referers[audio_url] = page_url
                                 return audio_url
-
-                    # Legacy dictionary pages are only used if both the page and
-                    # the individual audio button can be tied to the requested term.
-                    # No generic "first matching mp3" fallback, by design.
 
                 print(f"Cambridge has no verified {region.upper()} pronunciation audio for: {word!r}")
                 return None
@@ -335,8 +307,6 @@ class TTSProvider:
                         page_html = TTSProvider._fetch_html(page_url)
                         match = re.search(pattern, page_html)
                         if match:
-                            # Oxford may provide an absolute URL, a root-relative path,
-                            # or HTML-escaped query parameters.
                             audio_url = urljoin(page_url, unescape(match.group(1)))
                             TTSProvider._audio_referers[audio_url] = page_url
                             return audio_url
@@ -366,7 +336,6 @@ class TTSProvider:
         if not referer and host.endswith("oxfordlearnersdictionaries.com"):
             inferred_referer = True
             parts = [part for part in parsed.path.split("/") if part]
-            # Example: media/english/us_pron/b/bed/bed__us_2.mp3 -> /definition/english/bed
             try:
                 pron_index = parts.index("us_pron") if "us_pron" in parts else parts.index("uk_pron")
                 if len(parts) > pron_index + 2:
@@ -375,9 +344,6 @@ class TTSProvider:
             except (ValueError, IndexError):
                 pass
 
-        # If the method was called with a pasted MP3 URL (rather than after
-        # get_audio_url()), visit the inferred dictionary entry first to receive
-        # any cookies that the site expects for media requests.
         if inferred_referer and referer:
             try:
                 warmup = urllib.request.Request(
@@ -387,8 +353,6 @@ class TTSProvider:
                 with TTSProvider._opener.open(warmup, timeout=10) as page_response:
                     page_response.read(1024)
             except Exception:
-                # Still attempt the MP3 request; some entries are inaccessible
-                # while their directly-linked media remains available.
                 pass
 
         req = urllib.request.Request(
